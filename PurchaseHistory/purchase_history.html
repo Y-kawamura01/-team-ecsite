@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8" />
+
+<link href="/css/reset.css" th:href="@{/css/reset.css}" rel="stylesheet" />
+<link href="/css/style.css" th:href="@{/css/style.css}" rel="stylesheet" />
+
+<title>Sample Web</title>
+</head>
+<body>
+
+<header th:insert="fragments/page_header::pageHeader"></header>
+
+<main>
+
+  <div class="container history">
+    <div>
+      <h2>購入履歴</h2>
+    </div>
+    <div class="noData hidden">
+      <p class="info">購入履歴はありません。</p>
+    </div>
+    <table class="history">
+      <tr>
+        <th>購入日時</th><th>商品名</th><th>価格(円)</th><th>個数</th><th>宛名</th><th>宛先住所</th>
+      </tr>
+      <tr  th:each="history: ${historyList}">
+        <td th:text="${history.purchasedAt}"/>
+        <td th:text="${history.productName}"/>
+        <td th:text="${history.price}"/>
+        <td th:text="${history.productCount}"/>
+        <td><span  th:text ="${history.familyName} + ' ' + ${history.firstName}"></span></td>
+        <td th:text="${history.address}" class="address" />
+      </tr>
+    </table>
+    <div class="buttonArea">
+      <button id="deleteBtn">削除</button>
+    </div>
+  
+  </div>
+
+</main>
+<script th:inline="javascript">
+/*<![CDATA[*/
+document.addEventListener("DOMContentLoaded", event => {
+  isExistsHistoryList(false);  // 引数(削除済)にfalseを指定
+  document.getElementById("deleteBtn").addEventListener("click", () => {
+    deleteHistory();
+  });
+});
+
+/**
+ * 表示する購入履歴情報があるか判定する。
+ * @param deleted 削除済か判定するフラグ。true:削除済、false:未削除
+ */
+function isExistsHistoryList(deleted) {
+  let histroryListSize = /*[[${historyList.size()}]]*/ 0;
+  
+  //リストのサイズが0　もしくは　テーブルヘッダー以外の行がなければ
+  if (histroryListSize == 0 || deleted) {
+    // 情報なしメッセージを表示
+    document.querySelector(".noData").classList.remove("hidden");
+    
+    //テーブルをクリア
+    const table = document.querySelector("table.history");
+    while(table.lastChild){
+      table.removeChild(table.lastChild);
+    }
+    
+    // ボタンを非表示
+    const btn = document.querySelector(".buttonArea");
+    while(btn.lastChild){
+      btn.removeChild(btn.lastChild);
+    }
+  }
+}
+
+/**
+ * 購入履歴を削除する。
+ */
+function deleteHistory() {
+  fetch("/buzz/history/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  })
+  .then(response =>  response.text())
+  .then(result => {
+   isExistsHistoryList(true);
+  })  
+   .catch(error => {
+    console.error("Error: ", error);
+  });
+}
+/*]]>*/
+</script>
+
+</body>
+</html>

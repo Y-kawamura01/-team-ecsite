@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8" />
+
+<link href="/css/reset.css" th:href="@{/css/reset.css}" rel="stylesheet" />
+<link href="/css/style.css" th:href="@{/css/style.css}" rel="stylesheet" />
+
+<title>Sample Web</title>
+</head>
+<body>
+
+<header th:insert="fragments/page_header::pageHeader"></header>
+
+<main>
+
+  <div class="container">
+    <h2>新規ユーザー登録</h2>
+    
+    <table id="register" class="user">
+      <tr>
+        <th>ユーザー名<br /><span class="note">（メールアドレス）</span></th>
+        <td>
+          <input type="email" name="userName" placeholder="myaccount@abc.com" maxlength="32" />
+          <button id="checkUserName">重複確認</button>
+          <span id="checkOK" class="hidden">OK</span>
+          <ul id="userNameErrors" class="hidden"></ul>
+        </td>
+      </tr>
+      <tr>
+        <th>氏名</th>
+        <td>
+          <input type="text" name="familyName" placeholder="山田" maxlength="16" />
+          <input type="text" name="firstName" placeholder="太郎" maxlength="16" />
+          <ul id="familyNameErrors" class="hidden"></ul>
+          <ul id="firstNameErrors" class="hidden"></ul>
+        </td>
+      </tr>
+      <tr>
+        <th>氏名ふりがな</th>
+        <td>
+          <input type="text" name="familyNameKana" placeholder="やまだ" maxlength="16" />
+          <input type="text" name="firstNameKana" placeholder="たろう" maxlength="16" />
+          <ul id="familyNameKanaErrors" class="hidden"></ul>
+          <ul id="firstNameKanaErrors" class="hidden"></ul>
+        </td>
+      </tr>
+      <tr>
+        <th>性別</th>
+        <td>
+          <label><input type="radio" name="gender" value="男性" checked />男性</label>
+          <label><input type="radio" name="gender" value="女性" />女性</label>
+        </td>
+      </tr>
+      <tr>
+        <th>パスワード<br /><span class="note">（半角英数字 6～16文字）</span></th>
+        <td>
+          <input type="password" name="password" placeholder="パスワード" maxlength="16" />
+          <ul id="passwordErrors" class="hidden"></ul>
+        </td>
+      </tr>
+      <tr>
+        <th class="buttonArea">
+          <span class="info hidden">登録が完了しました。</span>
+        </th>
+        <th class="buttonArea">
+          <button id="registerBtn" disabled>登録</button>
+        </th>
+      </tr>
+    </table>
+  
+  </div>
+
+</main>
+
+<script th:inline="javascript">
+/*<![CDATA[*/
+/*
+ * 画面表示時 (onLoad) に動作する処理群
+ */
+// 重複チェックボタン押下時のイベントリスナー
+document.getElementById("checkUserName").addEventListener("click", () => {
+  const userName = document.querySelector("table#register input[name=userName]").value;
+  if (util.isEmpty(userName)) return;
+  
+  // ユーザー名のエラーチェック処理を呼び出す
+  const errorInfo = checkUserNameError(userName);
+  
+  // エラーメッセージのList(ul)を取得し、クリアする
+  const ul = document.getElementById("userNameErrors");
+  
+  // エラーチェック結果をList(ul)に表示する
+  if (errorInfo.hasError) {
+    createErrorList(ul, errorInfo.messages);
+    ul.className = "visible";
+    return;  // エラーがあった場合は重複チェックに進まない
+  } else {
+    ul.className = "hidden";
+  }
+  
+  // エラーチェックを通ったユーザー名に対し、重複チェック処理を呼び出す
+  checkDuplicate(userName);
+});
+
+// 登録ボタン押下時のイベントリスナー
+document.getElementById("registerBtn").addEventListener("click", () => {
+  const errorInfo = checkAllErrors();
+  if (errorInfo.hasError == false) {  // 各入力項目にエラーがなかった場合
+    registerUser();
+  }
+});
+
+/**
+ * ユーザー名のエラーチェックをおこなう。
+ * @param userName ユーザー名
+ */
+function checkUserNameError(userName) {
+  const errorInfo = {
+    "hasError": false,
+    "messages": []
+  };
+  
+  if (validator.isEmpty(userName)) {
+    errorInfo.messages.push(`「ユーザー名」が${validateConstants.ERR_MSG.EMPTY}`);
+  }
+  if (!validator.isMailAddress(userName)) {
+    errorInfo.messages.push(`「ユーザー名」の${validateConstants.ERR_MSG.INVALID_FORMAT}`);
+  }
+  if (validator.underMin(userName, validateConstants.USER_NAME_MIN)) {
+    errorInfo.messages.push(`「ユーザー名」の${validateConstants.ERR_MSG.UNDER_MIN}`);
+  }
+  if (validator.overMax(userName, validateConstants.USER_NAME_MAX)) {
+    errorInfo.messages.push(`「ユーザー名」の${validateConstants.ERR_MSG.OVER_MAX}`);
+  }
+  
+  if (errorInfo.messages.length > 0) {
+    errorInfo.hasError = true;
+  }
+  
+  return errorInfo;
+}
+
+/**
+ * ユーザー名の重複チェックをおこなう。
+ * @param userName ユーザー名
+ */
+function checkDuplicate(userName) {
+  // JavaにPOST送信するオブジェクトを取得・設定する
+  const postObj = {　"userName": userName　};
+  
+  /*
+   * fetch API を使用し、Javaと非同期通信(POST)を行う
+   * SUCCESS時(then)： 通信結果に応じてボタン、ユーザー名ボックスの使用可否状態、、OKメッセージの表示/非表示を切り替える
+   *　ERROR時(catch)： エラー情報を console に出力する
+   */
+  fetch("/buzz/user/duplicatedUserName", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(postObj),
+  })
+  .then(response =>  response.text())
+  .then(result => {
+    if (util.toBoolean(result)) {  // 重複あり
+       document.getElementById("registerBtn").disabled = true;
+       document.getElementById("checkOK").className = "hidden";
+       document.querySelector("table#register input[name=userName]").disabled = false;
+       alert(validateConstants.ERR_MSG.USERNAME_DUPLICATED);
+    } else {      // 重複なし
+      document.getElementById("registerBtn").disabled = false;
+      document.getElementById("checkOK").className = "info";
+      document.querySelector("table#register input[name=userName]").disabled = true;
+    }
+  })
+  .catch(error => {
+    console.error("Error: ", error);
+  });
+}
+
+/**
+ * ユーザー名以外の入力項目について、エラーチェックをおこなう。
+ * 対象のエラーチェック関数を次々に呼び出すテンプレート関数
+ * @param なし
+ */
+function checkAllErrors() {
+  let errorInfo = { "hasError": false };
+  if (checkFamilyNameError()) {
+    errorInfo.hasError = true;
+  }
+  if (checkFirstNameError()) {
+    errorInfo.hasError = true;
+  }
+  if(checkFamilyNameKanaError()) {
+    errorInfo.hasError = true;
+  }
+  if (checkFirstNameKanaError()) {
+    errorInfo.hasError = true;
+  }
+  if (checkPasswordError()) {
+    errorInfo.hasError = true;
+  }
+  return errorInfo;
+}
+
+/**
+ * 姓の入力項目について、エラーチェックをおこなう。
+ * @param なし
+ */
+function checkFamilyNameError() {
+  const target = document.querySelector("table#register input[name=familyName]").value;
+  let messages = [];
+  
+  if (validator.isEmpty(target)) {
+    messages.push(`「姓」が${validateConstants.ERR_MSG.EMPTY}`);
+  }
+  if (validator.overMax(target, validateConstants.FAMILY_NAME_MAX)) {
+    messages.push(`「姓」の${validateConstants.ERR_MSG.OVER_MAX}`);
+  }
+
+  // エラーメッセージのList(ul)を取得し、エラー有無によって表示/非表示を切り替える
+  const ul = document.getElementById("familyNameErrors");
+  if (messages.length > 0) {
+    createErrorList(ul, messages);
+    ul.className = "visible";
+    return true;  // エラーがあった場合
+  } else {
+    ul.className = "hidden";
+  }
+  
+  return false;  // エラーがなかった場合
+}
+
+/**
+ * 名の入力項目について、エラーチェックをおこなう。
+ * @param なし
+ */
+function checkFirstNameError() {
+  const target = document.querySelector("table#register input[name=firstName]").value;
+  let messages = [];
+  
+  if (validator.isEmpty(target)) {
+    messages.push(`「名」が${validateConstants.ERR_MSG.EMPTY}`);
+  }
+  if (validator.overMax(target, validateConstants.First_NAME_MAX)) {
+    messages.push(`「名」の${validateConstants.ERR_MSG.OVER_MAX}`);
+  }
+
+  // エラーメッセージのList(ul)を取得し、エラー有無によって表示/非表示を切り替える
+  const ul = document.getElementById("firstNameErrors");
+  if (messages.length > 0) {
+    createErrorList(ul, messages);
+    ul.className = "visible";
+    return true;  // エラーがあった場合
+  } else {
+    ul.className = "hidden";
+  }
+  
+  return false;  // エラーがなかった場合
+}
+
+/**
+ * 姓ふりがなの入力項目について、エラーチェックをおこなう。
+ * @param なし
+ */
+function checkFamilyNameKanaError() {
+  const target = document.querySelector("table#register input[name=familyNameKana]").value;
+  let messages = [];
+  
+  if (validator.isEmpty(target)) {
+    messages.push(`「姓ふりがな」が${validateConstants.ERR_MSG.EMPTY}`);
+  }
+  if (!validator.isHiragana(target)) {
+    messages.push(`「姓ふりがな」に${validateConstants.ERR_MSG.NOT_ONLY_HIRAGANA}`);
+  }
+  if (validator.overMax(target, validateConstants.FAMILY_NAME_KANA_MAX)) {
+    messages.push(`「姓ふりがな」の${validateConstants.OVER_MAX}`);
+  }
+
+  // エラーメッセージのList(ul)を取得し、エラー有無によって表示/非表示を切り替える
+  const ul = document.getElementById("familyNameKanaErrors");
+  if (messages.length > 0) {
+    createErrorList(ul, messages);
+    ul.className = "visible";
+    return true;  // エラーがあった場合
+  } else {
+    ul.className = "hidden";
+  }
+  
+  return false;  // エラーがなかった場合
+}
+
+/**
+ * 名ふりがなの入力項目について、エラーチェックをおこなう。
+ * @param なし
+ */
+function checkFirstNameKanaError() {
+  const target = document.querySelector("table#register input[name=firstNameKana]").value;
+  let messages = [];
+  
+  if (validator.isEmpty(target)) {
+    messages.push(`「名ふりがな」が${validateConstants.ERR_MSG.EMPTY}`);
+  }
+  if (!validator.isHiragana(target)) {
+    messages.push(`「名ふりがな」に${validateConstants.ERR_MSG.NOT_ONLY_HIRAGANA}`);
+  }
+  if (validator.overMax(target, validateConstants.FIRST_NAME_KANA_MAX)) {
+    messages.push(`「名ふりがな」の${validateConstants.ERR_MSG.OVER_MAX}`);
+  }
+
+  // エラーメッセージのList(ul)を取得し、エラー有無によって表示/非表示を切り替える
+  const ul = document.getElementById("firstNameKanaErrors");
+  if (messages.length > 0) {
+    createErrorList(ul, messages);
+    ul.className = "visible";
+    return true;  // エラーがあった場合
+  } else {
+    ul.className = "hidden";
+  }
+  
+  return false;  // エラーがなかった場合
+}
+
+/**
+ * パスワードの入力項目について、エラーチェックをおこなう。
+ * @param なし
+ */
+function checkPasswordError() {
+  const target = document.querySelector("table#register input[name=password]").value;
+  let messages = [];
+  
+  if (validator.isEmpty(target)) {
+    messages.push(`「パスワード」が${validateConstants.ERR_MSG.EMPTY}`);
+  }
+  if (!validator.isHalfAlphanumeric(target)) {
+    messages.push(`「パスワード」に${validateConstants.ERR_MSG.NOT_ONLY_ALPHANUMERIC}`);
+  }
+  if (validator.overMax(target, validateConstants.PASSWORD_MAX)) {
+    messages.push(`「パスワード」の${validateConstants.ERR_MSG.OVER_MAX}`);
+  }
+  if (validator.underMin(target, validateConstants.PASSWORD_MIN)) {
+    messages.push(`「パスワード」の${validateConstants.ERR_MSG.UNDER_MIN}`);
+  }
+
+
+  // エラーメッセージのList(ul)を取得し、エラー有無によって表示/非表示を切り替える
+  const ul = document.getElementById("passwordErrors");
+  if (messages.length > 0) {
+    createErrorList(ul, messages);
+    ul.className = "visible";
+    return true;  // エラーがあった場合
+  } else {
+    ul.className = "hidden";
+  }
+  
+  return false;  // エラーがなかった場合
+}
+
+/**
+ * ユーザー情報をDBテーブルに登録する。
+ * @param なし
+ */
+function registerUser() {
+  // JavaにPOST送信するオブジェクトを取得・設定する
+  const postObj = {
+    "familyName": document.querySelector("table#register input[name=familyName]").value,
+    "firstName": document.querySelector("table#register input[name=firstName]").value,
+    "familyNameKana": document.querySelector("table#register input[name=familyNameKana]").value,
+    "firstNameKana": document.querySelector("table#register input[name=firstNameKana]").value,
+    "gender": document.querySelector("table#register input[name=gender]:checked").value == "男性" ? "0" : "1",
+    "userName": document.querySelector("table#register input[name=userName]").value,
+    "password": document.querySelector("table#register input[name=password]").value
+  };
+  
+  /*
+   * fetch API を使用し、Javaと非同期通信(POST)を行う
+   * SUCCESS時(then)： 通信結果を使用してウェルカムメッセージを更新する
+   *　ERROR時(catch)： エラー情報を console に出力する
+   */
+  fetch("/buzz/user/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(postObj),
+  })
+  .then(response =>  response.text())
+  .then(result => {
+    alert("ユーザー情報を登録しました。");
+      
+    // トップページへ遷移する
+    location.replace("/buzz/");
+  })
+  .catch(error => {
+    console.error("Error: ", error);
+  });
+}
+/*]]>*/
+</script>
+
+</body>
+</html>
